@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ระบบหยิบสินค้า แพ็คสินค้า และจ่าหน้าพัสดุ</title>
+  <style>
+    body { font-family: sans-serif; max-width: 960px; margin: 0 auto; padding: 20px; background: #f8f9fa; }
+    .order-card { background: #fff; border: 1px solid #ddd; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+    .badge { padding: 4px 10px; border-radius: 999px; font-size: 0.85rem; font-weight: bold; }
+    .wait { background: #fff3cd; color: #856404; }
+    .done { background: #d4edda; color: #155724; }
+    button { padding: 8px 14px; border-radius: 6px; border: none; cursor: pointer; margin-right: 8px; }
+    .btn-pack { background: #198754; color: #fff; }
+    .btn-label { background: #0d6efd; color: #fff; }
+    .shipping-label { display: none; border: 2px dashed #000; padding: 20px; margin-top: 20px; background: #fff; }
+    @media print {
+      body * { visibility: hidden; }
+      .shipping-label.active, .shipping-label.active * { visibility: visible; }
+      .shipping-label.active { display: block; position: fixed; left: 0; top: 0; width: 100%; border: 2px solid #000; }
+    }
+  </style>
+</head>
+<body>
+  <h1>📦 รายการหยิบของ แพ็คสินค้า และใบจ่าหน้า</h1>
+  <a href="index.html">← กลับไปหน้าแลนดิ้งเพจ</a>
+  <div id="ordersList" style="margin-top: 20px;">กำลังโหลดคำสั่งซื้อ...</div>
+
+  <div id="shippingLabel" class="shipping-label">
+    <h3>ผู้ส่ง: ร้านน้ำผึ้งแท้คัดพิเศษ</h3>
+    <p>โทร: 08X-XXX-XXXX | ที่อยู่: มหาวิทยาลัย / ศูนย์กระจายสินค้า</p>
+    <hr />
+    <h3>ผู้รับ: <span id="lblName"></span></h3>
+    <p><strong>เบอร์โทร:</strong> <span id="lblPhone"></span></p>
+    <p><strong>ที่อยู่จัดส่ง:</strong> <span id="lblAddress"></span></p>
+    <hr />
+    <p><strong>หมายเลขออเดอร์:</strong> <span id="lblOrderId"></span></p>
+    <p><strong>รายการสินค้า:</strong> <span id="lblItems"></span></p>
+  </div>
+
+  <script>
+    const SCRIPT_URL = 'วาง_GOOGLE_APPS_SCRIPT_WEB_APP_URL_ที่นี่';
+    let orders = [];
+
+    async function loadOrders() {
+      const res = await fetch(`${SCRIPT_URL}?action=getOrders`);
+      const data = await res.json();
+      orders = data.orders || [];
+      const el = document.getElementById('ordersList');
+
+      if (!orders.length) {
+        el.innerHTML = '<p>ยังไม่มีคำสั่งซื้อ</p>';
+        return;
+      }
+
+      el.innerHTML = orders.map((o, i) => `
+        <div class="order-card">
+          <strong>#${o.order_id}</strong> (${o.timestamp})
+          <span class="badge ${o.status === 'แพ็คแล้ว' ? 'done' : 'wait'}">${o.status}</span>
+          <p><strong>หยิบสินค้า:</strong> ${o.items_summary}</p>
+          <p><strong>ลูกค้า:</strong> ${o.customer_name} (${o.phone}) | <strong>ยอดรวม:</strong> ${Number(o.total).toLocaleString()} บาท</p>
+          <p><strong>ที่อยู่:</strong> ${o.address}</p>
+          <button class="btn-pack" onclick="markPacked('${o.order_id}')">ยืนยันแพ็คสินค้าแล้ว</button>
+          <button class="btn-label" onclick="printLabel(${i})">พิมพ์ใบจ่าหน้าพัสดุ</button>
+        </div>
+      `).join('');
+    }
+
+    async function markPacked(orderId) {
+      await fetch(SCRIPT_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'updateStatus', order_id: orderId, status: 'แพ็คแล้ว' })
+      });
+      loadOrders();
+    }
+
+    function printLabel(index) {
+      const o = orders[index];
+      document.getElementById('lblOrderId').textContent = o.order_id;
+      document.getElementById('lblName').textContent = o.customer_name;
+      document.getElementById('lblPhone').textContent = o.phone;
+      document.getElementById('lblAddress').textContent = o.address;
+      document.getElementById('lblItems').textContent = o.items_summary;
+
+      const box = document.getElementById('shippingLabel');
+      box.classList.add('active');
+      window.print();
+      setTimeout(() => box.classList.remove('active'), 500);
+    }
+
+    loadOrders();
+  </script>
+</body>
+</html>

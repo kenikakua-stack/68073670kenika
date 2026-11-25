@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>น้ำผึ้งแท้จากธรรมชาติ | Honey Store</title>
+  <style>
+    body { font-family: sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; background: #fffdf7; color: #2c221e; }
+    header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f2c94c; padding-bottom: 12px; margin-bottom: 24px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+    .card { border: 1px solid #eadbc8; border-radius: 12px; padding: 16px; background: #fff; }
+    .card img { width: 100%; height: 200px; object-fit: cover; border-radius: 8px; background: #f5efe6; }
+    .price { font-size: 1.2rem; font-weight: bold; color: #b4690e; margin: 8px 0; }
+    .form-box { margin-top: 32px; background: #fff8e7; padding: 20px; border-radius: 12px; border: 1px solid #f2c94c; }
+    input, textarea, button { width: 100%; padding: 10px; margin-top: 8px; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; }
+    button { background: #e09f1f; color: #fff; font-weight: bold; border: none; cursor: pointer; }
+    button:hover { background: #c58812; }
+    .qty-input { width: 80px; display: inline-block; margin-left: 8px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🍯 น้ำผึ้งแท้คัดพิเศษ</h1>
+    <a href="pack.html">หน้าจัดการแพ็คสินค้า (แอดมิน)</a>
+  </header>
+
+  <div id="products" class="grid">กำลังโหลดรายการน้ำผึ้ง...</div>
+
+  <div class="form-box">
+    <h2>กรอกข้อมูลจัดส่ง</h2>
+    <form id="orderForm">
+      <input type="text" id="customer_name" placeholder="ชื่อ-นามสกุล ผู้รับ" required />
+      <input type="tel" id="phone" placeholder="เบอร์โทรศัพท์" required />
+      <textarea id="address" rows="3" placeholder="ที่อยู่จัดส่ง (บ้านเลขที่ ถนน ตำบล/แขวง อำเภอ/เขต จังหวัด รหัสไปรษณีย์)" required></textarea>
+      <p id="summaryText">ยอดรวม: 0 บาท</p>
+      <button type="submit" id="submitBtn">ยืนยันการสั่งซื้อ</button>
+    </form>
+    <p id="resultMsg"></p>
+  </div>
+
+  <script>
+    const SCRIPT_URL = 'วาง_GOOGLE_APPS_SCRIPT_WEB_APP_URL_ที่นี่';
+    let products = [];
+
+    async function loadProducts() {
+      const res = await fetch(`${SCRIPT_URL}?action=getProducts`);
+      const data = await res.json();
+      products = data.products || [];
+      const container = document.getElementById('products');
+      container.innerHTML = products.map((p, idx) => `
+        <div class="card">
+          <img src="${p.image}" alt="${p.name}" onerror="this.src='https://placehold.co/400x250?text=Honey+SKU'" />
+          <h3>${p.name}</h3>
+          <small>รหัส SKU: ${p.sku} | คงเหลือ: ${p.stock} ขวด</small>
+          <div class="price">${Number(p.price).toLocaleString()} บาท</div>
+          <label>
+            จำนวน:
+            <input type="number" min="0" max="${p.stock}" value="0" data-idx="${idx}" class="qty-input" onchange="calcTotal()" />
+          </label>
+        </div>
+      `).join('');
+    }
+
+    function getSelectedItems() {
+      const inputs = document.querySelectorAll('.qty-input');
+      const selected = [];
+      inputs.forEach(input => {
+        const qty = Number(input.value || 0);
+        if (qty > 0) {
+          const p = products[Number(input.dataset.idx)];
+          selected.push({ sku: p.sku, name: p.name, price: Number(p.price), qty });
+        }
+      });
+      return selected;
+    }
+
+    function calcTotal() {
+      const items = getSelectedItems();
+      const total = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+      document.getElementById('summaryText').textContent = `ยอดรวม: ${total.toLocaleString()} บาท`;
+      return total;
+    }
+
+    document.getElementById('orderForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const items = getSelectedItems();
+      if (items.length === 0) return alert('กรุณาเลือกสินค้าอย่างน้อย 1 ชิ้น');
+
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.textContent = 'กำลังบันทึกคำสั่งซื้อ...';
+
+      const payload = {
+        action: 'createOrder',
+        customer_name: document.getElementById('customer_name').value.trim(),
+        phone: document.getElementById('phone').value.trim(),
+        address: document.getElementById('address').value.trim(),
+        items,
+        items_summary: items.map(i => `${i.name} (${i.sku}) x${i.qty}`).join(', '),
+        total: calcTotal()
+      };
+
+      const res = await fetch(SCRIPT_URL, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      const result = await res.json();
+
+      document.getElementById('resultMsg').textContent =
+        result.status === 'ok'
+          ? `สั่งซื้อสำเร็จ! หมายเลขออเดอร์ของคุณคือ ${result.orderId}`
+          : 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง';
+
+      btn.disabled = false;
+      btn.textContent = 'ยืนยันการสั่งซื้อ';
+      e.target.reset();
+      calcTotal();
+      loadProducts();
+    });
+
+    loadProducts();
+  </script>
+</body>
+</html>
